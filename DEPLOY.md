@@ -22,7 +22,7 @@
 ## 第一步：创建 GitHub 仓库
 
 1. 打开 GitHub → **New repository**
-2. 名称建议：`steel-prop-predictor`
+2. 名称：`steel-prop-predictor`（仓库地址将是 `https://github.com/ustbTobyMa/steel-prop-predictor`）
 3. 可见性：Public（GitHub Pages 免费）或 Private（需 GitHub Pro 才能用 Pages）
 4. **不要** 勾选 “Add a README”
 
@@ -35,7 +35,7 @@ git init
 git add .
 git commit -m "Initial public deploy: web UI + API + models (no dataset)"
 git branch -M main
-git remote add origin https://github.com/你的用户名/steel-prop-predictor.git
+git remote add origin https://github.com/ustbTobyMa/steel-prop-predictor.git
 git push -u origin main
 ```
 
@@ -48,7 +48,7 @@ git push -u origin main
 1. 仓库 → **Settings** → **Pages**
 2. **Build and deployment** → Source 选 **GitHub Actions**
 3. 推送 `main` 分支后，Actions 工作流 `Deploy GitHub Pages` 会自动运行
-4. 部署完成后访问：`https://你的用户名.github.io/steel-prop-predictor/`
+4. 部署完成后访问：`https://ustbTobyMa.github.io/steel-prop-predictor/`
 
 ---
 
