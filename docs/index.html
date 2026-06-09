@@ -12,7 +12,7 @@
         <div>
           <p class="eyebrow">Composition → Property → Thermo</p>
           <h1>钢铁成分性能预测</h1>
-          <p class="subtitle">输入化学成分，预测力学/物理性能，并给出成分机理与相近材料的热力学解释参考。</p>
+          <p class="subtitle">输入化学成分；连接 Python 模型 API 后可输出力学/物理性能，无 API 时提供 GitHub Pages 静态成分机理说明。</p>
         </div>
         <div class="status" id="status-box">检查模型状态…</div>
       </header>
@@ -69,8 +69,8 @@
 
           <div class="result-block">
             <h3>机理解释</h3>
-            <div id="composition-explain" class="explain-box placeholder">等待预测…</div>
-            <p class="footnote">公开部署版仅提供成分机理说明，不包含 Thermo-Calc 数据库对照。</p>
+            <div id="composition-explain" class="explain-box placeholder">等待输入…</div>
+            <p class="footnote">GitHub Pages 只托管静态网页；数值预测需要连接额外 API 或在本机运行。</p>
           </div>
         </section>
       </main>

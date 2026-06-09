@@ -69,6 +69,7 @@ h1 {
 }
 
 .status.ok { border-color: #6ee7b7; background: #ecfdf5; }
+.status.neutral { border-color: #93c5fd; background: #eff6ff; }
 .status.bad { border-color: #fca5a5; background: #fef2f2; }
 
 .layout {
@@ -196,6 +197,11 @@ button.ghost {
   margin-top: 6px;
   font-size: 28px;
   font-weight: 700;
+}
+
+.metric-card.static-only .value {
+  font-size: 20px;
+  color: var(--muted);
 }
 
 .metric-card .meta {

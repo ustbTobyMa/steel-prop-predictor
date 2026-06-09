@@ -1,4 +1,4 @@
-const API_BASE = (window.STEEL_PROP_CONFIG && window.STEEL_PROP_CONFIG.API_BASE) || "";
+const API_BASE = ((window.STEEL_PROP_CONFIG && window.STEEL_PROP_CONFIG.API_BASE) || "").trim();
 
 const ELEMENTS = [
   ["C", "碳"],
@@ -28,13 +28,16 @@ const PRESET_LOW_ALLOY = {
   Mo: 0.2,
 };
 
+const MECHANICAL_LABELS = ["抗拉强度", "屈服强度", "断后伸长率", "硬度", "断面收缩率"];
+const PHYSICAL_LABELS = ["弹性模量", "泊松比", "剪切模量", "密度", "热导率", "比热容", "体积模量"];
+
 const grid = document.getElementById("composition-grid");
 const statusBox = document.getElementById("status-box");
 const predictBtn = document.getElementById("predict-btn");
 const presetBtn = document.getElementById("preset-low-alloy");
 
 function apiUrl(path) {
-  if (!API_BASE || API_BASE.includes("YOUR-RENDER-APP")) {
+  if (!API_BASE || API_BASE.includes("YOUR-RENDER-APP") || API_BASE.includes("YOUR-API")) {
     return null;
   }
   return `${API_BASE.replace(/\/$/, "")}${path}`;
@@ -97,6 +100,16 @@ function renderMetrics(container, metrics) {
   }
 }
 
+function renderApiRequired(container, labels) {
+  container.innerHTML = labels.map((label) => `
+    <article class="metric-card static-only">
+      <div class="label">${label}</div>
+      <div class="value">需要模型 API</div>
+      <div class="meta">GitHub Pages 不能直接运行 Python / LightGBM 模型</div>
+    </article>
+  `).join("");
+}
+
 function renderExplanation(payload) {
   const compBox = document.getElementById("composition-explain");
   const comp = payload.explanation?.composition_mechanism;
@@ -118,11 +131,87 @@ function renderWarnings(warnings) {
   box.innerHTML = warnings.map((w) => `<div>• ${w}</div>`).join("");
 }
 
+function staticMechanism(composition, processText) {
+  const value = (key) => Number(composition[key] || 0);
+  const knownSum = ELEMENTS.reduce((sum, [symbol]) => sum + value(symbol), 0);
+  const fe = Math.max(0, 100 - knownSum);
+  const notes = [
+    `非 Fe 元素合计约 ${knownSum.toFixed(3)} wt%，按余额估算 Fe 约 ${fe.toFixed(3)} wt%。`,
+  ];
+  const c = value("C");
+  const cr = value("Cr");
+  const ni = value("Ni");
+  const mo = value("Mo");
+  const si = value("Si");
+  const vnbti = value("V") + value("Nb") + value("Ti");
+
+  if (knownSum > 100) {
+    notes.push("当前成分总和超过 100 wt%，请检查输入值。");
+  }
+  if (c > 0) {
+    notes.push(`碳含量 ${c.toFixed(3)} wt%，通常是强度、硬度和淬透性的核心影响因素。`);
+  }
+  if (cr + mo + value("V") + value("Nb") + value("Ti") > 1.0) {
+    notes.push("Cr/Mo/V/Nb/Ti 等碳化物形成元素较明显，可能提高硬度、耐磨性和回火稳定性。");
+  }
+  if (ni + value("Mn") + c > 2.0) {
+    notes.push("Ni/Mn/C 等奥氏体稳定化贡献较高，可能影响强韧性平衡和组织稳定性。");
+  }
+  if (vnbti > 0.05) {
+    notes.push("V/Nb/Ti 微合金化元素存在，可能通过析出强化和晶粒细化影响屈服强度。");
+  }
+  if (cr >= 12) {
+    notes.push("Cr 含量达到不锈钢/耐蚀钢常见区间，模型解释应与碳钢、低合金钢区分。");
+  }
+  if (ni >= 8) {
+    notes.push("Ni 含量较高，可能对应奥氏体不锈钢或高韧性合金体系。");
+  }
+  if (mo >= 0.3) {
+    notes.push("Mo 可提高回火稳定性，并对高温强度和耐蚀行为有贡献。");
+  }
+  if (si >= 0.5) {
+    notes.push("Si 会带来铁素体固溶强化，含量较高时需关注韧性和加工性影响。");
+  }
+  if (!processText) {
+    notes.push("未提供工艺/热处理信息；实际力学性能对工艺敏感，不能只凭成分定量判断。");
+  }
+  notes.push("当前为无 API 静态网页，以上为规则化机理说明，不是机器学习模型数值预测。");
+
+  return {
+    summary: notes.slice(0, 5).join(" "),
+    mechanism_notes: notes,
+  };
+}
+
+function currentPayload() {
+  return {
+    material_subclass: document.getElementById("material-subclass").value,
+    process_text: document.getElementById("process-text").value.trim(),
+    composition: readComposition(),
+  };
+}
+
+function renderStaticOnly(payload, extraWarning) {
+  renderApiRequired(document.getElementById("mechanical-results"), MECHANICAL_LABELS);
+  renderApiRequired(document.getElementById("physical-results"), PHYSICAL_LABELS);
+  renderExplanation({
+    explanation: {
+      composition_mechanism: staticMechanism(payload.composition, payload.process_text),
+    },
+  });
+  renderWarnings([
+    extraWarning,
+    "当前 GitHub Pages 未连接后端 API，因此不显示机器学习数值预测。",
+    "如需完整预测，请在本机运行 Python 服务，或以后接入可用的 API 地址。",
+  ].filter(Boolean));
+}
+
 async function checkHealth() {
   const url = apiUrl("/api/health");
   if (!url) {
-    statusBox.className = "status bad";
-    statusBox.textContent = "请先在 docs/config.js 配置 Render API 地址";
+    statusBox.className = "status neutral";
+    statusBox.textContent = "GitHub Pages 静态版：未连接模型 API";
+    predictBtn.textContent = "生成静态说明";
     return;
   }
   try {
@@ -142,19 +231,15 @@ async function checkHealth() {
 }
 
 async function predict() {
+  const payload = currentPayload();
   const url = apiUrl("/api/predict");
   if (!url) {
-    alert("请先在 docs/config.js 中把 YOUR-RENDER-APP 改成你的 Render 服务地址。");
+    renderStaticOnly(payload);
     return;
   }
   predictBtn.disabled = true;
   predictBtn.textContent = "预测中…";
   try {
-    const payload = {
-      material_subclass: document.getElementById("material-subclass").value,
-      process_text: document.getElementById("process-text").value.trim(),
-      composition: readComposition(),
-    };
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -169,10 +254,13 @@ async function predict() {
     renderExplanation(data);
     renderWarnings(data.warnings);
   } catch (err) {
-    alert(`预测失败：${err.message}`);
+    renderStaticOnly(payload, `无法连接 API：${err.message}`);
   } finally {
     predictBtn.disabled = false;
     predictBtn.textContent = "开始预测";
+    if (!apiUrl("/api/health")) {
+      predictBtn.textContent = "生成静态说明";
+    }
   }
 }
 

@@ -1,142 +1,91 @@
-# GitHub + Render 部署指南
+# GitHub Pages 部署指南（无 API 版）
 
-本指南帮助你在 **不暴露数据库** 的前提下，把 SteelProp 网站发布到 GitHub。
+本指南用于把 SteelProp 发布为 **GitHub Pages 静态网页**。当前方案不需要 Render，也不需要信用卡。
 
-## 安全说明
+## 现在能上线什么
 
-以下内容 **不会** 进入 GitHub 仓库（已在 `.gitignore` 中排除）：
+GitHub Pages 可以托管：
 
-- `*.csv` / `*.jsonl` 等原始或清洗后的数据表
+- `docs/index.html`
+- `docs/styles.css`
+- `docs/app.js`
+- `docs/config.js`
+
+当前网页会提供成分输入和静态机理说明。由于 GitHub Pages 不能运行后端程序，它不能直接执行 `api/` 里的 Flask 服务，也不能直接加载 `.pkl` 模型做机器学习数值预测。
+
+## 安全边界
+
+以下内容不会进入公开网页：
+
+- 全量 CSV 数据集
 - `thermo_explain.csv`、`metadata.csv`、`modeling_clean.csv`
-- 全量钢铁热力学数据集
+- 测试集逐条预测结果
 
-仓库中仅包含：
-- 前端静态页面（`docs/`）
-- 预测 API 代码（`api/`）
-- 训练好的模型权重（`models/*.pkl`，约 69MB）
+仓库里保留的 `api/` 和 `models/` 只是为了本地运行或以后接入后端服务；当前 GitHub Pages 静态网页不会直接运行它们。
 
-公开版 **不提供** 数据库相近材料 Thermo-Calc 对照；该功能仅保留在本地完整版。
+## 部署步骤
 
----
+仓库已经配置了 GitHub Pages 工作流：
 
-## 第一步：创建 GitHub 仓库
+```text
+.github/workflows/deploy-pages.yml
+```
 
-1. 打开 GitHub → **New repository**
-2. 名称：`steel-prop-predictor`（仓库地址将是 `https://github.com/ustbTobyMa/steel-prop-predictor`）
-3. 可见性：Public（GitHub Pages 免费）或 Private（需 GitHub Pro 才能用 Pages）
-4. **不要** 勾选 “Add a README”
+推送 `main` 分支后，GitHub Actions 会把 `docs/` 发布到：
 
-在终端执行：
+```text
+https://ustbTobyMa.github.io/steel-prop-predictor/
+```
+
+本地提交并推送：
 
 ```bash
 cd "/Users/xiaotaoma/Desktop/full thermo database/full_dataset_with_feature_doc/composition_property_thermo/steel-prop-github"
-
-git init
+git status
 git add .
-git commit -m "Initial public deploy: web UI + API + models (no dataset)"
-git branch -M main
-git remote add origin https://github.com/ustbTobyMa/steel-prop-predictor.git
-git push -u origin main
-```
-
-> 若模型文件超过 GitHub 单文件 100MB 限制，需改用 [Git LFS](https://git-lfs.github.com/) 推送 `models/`。
-
----
-
-## 第二步：开启 GitHub Pages
-
-1. 仓库 → **Settings** → **Pages**
-2. **Build and deployment** → Source 选 **GitHub Actions**
-3. 推送 `main` 分支后，Actions 工作流 `Deploy GitHub Pages` 会自动运行
-4. 部署完成后访问：`https://ustbTobyMa.github.io/steel-prop-predictor/`
-
----
-
-## 第三步：部署 API 到 Render（免费）
-
-GitHub Pages 只能托管静态网页，预测 API 需要单独部署。
-
-### 方式 A：一键部署（推荐）
-
-1. 打开 README 里的 **Deploy to Render** 按钮，或直接访问：  
-   https://render.com/deploy?repo=https://github.com/ustbTobyMa/steel-prop-predictor
-2. 用 GitHub 登录 Render 并授权
-3. 确认读取到 `render.yaml`，点击 **Apply**
-4. 等待 `steel-prop-api` 服务变为 **Live**
-5. 复制服务 URL（通常为 `https://steel-prop-api.onrender.com`）
-
-### 方式 B：手动 Blueprint
-
-1. 注册 [Render](https://render.com/)
-2. **New** → **Blueprint** → 连接 `ustbTobyMa/steel-prop-predictor`
-3. 按提示完成部署
-
-验证：
-
-```bash
-curl https://steel-prop-api.onrender.com/api/health
-```
-
----
-
-## 第四步：把 API 地址写入前端配置
-
-编辑仓库中的 `docs/config.js`：
-
-```javascript
-window.STEEL_PROP_CONFIG = {
-  API_BASE: "https://steel-prop-api.onrender.com",
-};
-```
-
-提交并推送：
-
-```bash
-git add docs/config.js
-git commit -m "Point frontend to Render API"
+git commit -m "Use static GitHub Pages mode without API"
 git push
 ```
 
-等待 GitHub Pages 重新部署后，打开 Pages 网址即可使用。
+如果 GitHub 仓库的 Pages 还没打开：
 
----
+1. 进入 GitHub 仓库 `ustbTobyMa/steel-prop-predictor`
+2. 打开 **Settings** → **Pages**
+3. **Build and deployment** → Source 选择 **GitHub Actions**
+4. 等待 Actions 里的 `Deploy GitHub Pages` 运行完成
 
-## 常见问题
+## 如果以后有 API
 
-### Pages 打开后提示“请配置 Render API 地址”
+以后如果有不需要信用卡或学校服务器上的 Python API，只需要改 `docs/config.js`：
 
-说明 `docs/config.js` 里仍是 `YOUR-RENDER-APP`，按第四步修改。
+```javascript
+window.STEEL_PROP_CONFIG = {
+  API_BASE: "https://your-api.example.com",
+};
+```
 
-### Render 首次请求很慢
+然后提交并推送，GitHub Pages 会重新发布。API 需要提供：
 
-免费实例会休眠，首次访问需等待约 30–60 秒唤醒。
+- `GET /api/health`
+- `POST /api/predict`
 
-### 想恢复 Thermo-Calc 数据库对照
-
-那是本地完整版功能，涉及私有 CSV，**不应** 上传到 GitHub。请在本机运行：
+## 本地测试 API
 
 ```bash
-cd composition_property_thermo
-./run_webapp.sh
+cd steel-prop-github
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+PYTHONPATH=api gunicorn api.app:app --bind 127.0.0.1:10000
+curl http://127.0.0.1:10000/api/health
 ```
 
-### 如何更新模型
+本地测试时可把 `docs/config.js` 改为：
 
-1. 在本机重新训练：`python3 train_models.py`
-2. 运行同步脚本（如有）或手动复制 `model_outputs/*/target_*/best_model.pkl` 到 `steel-prop-github/models/`
-3. 提交并推送；Render 会自动重新部署
-
----
-
-## 目录结构
-
+```javascript
+window.STEEL_PROP_CONFIG = {
+  API_BASE: "http://127.0.0.1:10000",
+};
 ```
-steel-prop-github/
-├── docs/                 # GitHub Pages 静态站
-├── api/                  # Flask API
-├── models/               # 仅 .pkl + feature_spec.json
-├── .github/workflows/    # Pages 自动部署
-├── render.yaml           # Render 一键部署
-├── requirements.txt
-└── .gitignore            # 阻止 CSV 数据入库
-```
+
+测试完如果要继续发布无 API 版，再把 `API_BASE` 改回空字符串。
