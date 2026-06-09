@@ -54,12 +54,22 @@ git push -u origin main
 
 ## 第三步：部署 API 到 Render（免费）
 
-GitHub Pages 只能托管静态页面，预测 API 需单独部署。
+GitHub Pages 只能托管静态网页，预测 API 需要单独部署。
+
+### 方式 A：一键部署（推荐）
+
+1. 打开 README 里的 **Deploy to Render** 按钮，或直接访问：  
+   https://render.com/deploy?repo=https://github.com/ustbTobyMa/steel-prop-predictor
+2. 用 GitHub 登录 Render 并授权
+3. 确认读取到 `render.yaml`，点击 **Apply**
+4. 等待 `steel-prop-api` 服务变为 **Live**
+5. 复制服务 URL（通常为 `https://steel-prop-api.onrender.com`）
+
+### 方式 B：手动 Blueprint
 
 1. 注册 [Render](https://render.com/)
-2. **New** → **Blueprint** → 连接你的 GitHub 仓库
-3. Render 会读取根目录 `render.yaml` 并创建 `steel-prop-api` 服务
-4. 部署完成后得到地址，例如：`https://steel-prop-api.onrender.com`
+2. **New** → **Blueprint** → 连接 `ustbTobyMa/steel-prop-predictor`
+3. 按提示完成部署
 
 验证：
 

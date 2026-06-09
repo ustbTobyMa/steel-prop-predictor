@@ -29,7 +29,12 @@ curl http://127.0.0.1:10000/api/health
 
 ## 部署
 
-详见 [DEPLOY.md](./DEPLOY.md)。
+- 网站（已配置 GitHub Pages）：https://ustbTobyMa.github.io/steel-prop-predictor/
+- API 一键部署到 Render（需登录 Render 并授权 GitHub）：
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ustbTobyMa/steel-prop-predictor)
+
+详细步骤见 [DEPLOY.md](./DEPLOY.md)。
 
 ## 本地完整版（含 Thermo-Calc 数据库对照）
 
