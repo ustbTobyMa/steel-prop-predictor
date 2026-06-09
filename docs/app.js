@@ -1,6 +1,10 @@
 import { predictInBrowser } from "./browser-predictor.js";
 
 const API_BASE = ((window.STEEL_PROP_CONFIG && window.STEEL_PROP_CONFIG.API_BASE) || "").trim();
+const DEEPSEEK_SESSION_KEY = "steelprop_deepseek_demo_key";
+const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
+const DEEPSEEK_MODEL = "deepseek-v4-flash";
+let volatileDeepSeekDemoKey = "";
 
 const ELEMENTS = [
   ["C", "碳"],
@@ -37,6 +41,10 @@ const grid = document.getElementById("composition-grid");
 const statusBox = document.getElementById("status-box");
 const predictBtn = document.getElementById("predict-btn");
 const presetBtn = document.getElementById("preset-low-alloy");
+const deepseekKeyInput = document.getElementById("deepseek-key");
+const saveDeepseekKeyBtn = document.getElementById("save-deepseek-key");
+const clearDeepseekKeyBtn = document.getElementById("clear-deepseek-key");
+const deepseekKeyStatus = document.getElementById("deepseek-key-status");
 
 function apiUrl(path) {
   if (!API_BASE || API_BASE.includes("YOUR-RENDER-APP") || API_BASE.includes("YOUR-API")) {
@@ -125,6 +133,9 @@ function renderExplanation(payload) {
   if (ai?.status === "ok" && ai.text) {
     aiBox.classList.remove("hidden");
     aiBox.innerHTML = `<strong>AI 辅助解释</strong>${paragraphs(ai.text)}`;
+  } else if (ai?.status === "loading") {
+    aiBox.classList.remove("hidden");
+    aiBox.innerHTML = `<strong>AI 辅助解释</strong><p>正在生成解释…</p>`;
   } else if (ai?.enabled && ai.status !== "ok") {
     aiBox.classList.remove("hidden");
     aiBox.innerHTML = `<strong>AI 辅助解释暂不可用</strong><p>${escapeHtml(ai.error || ai.status)}</p>`;
@@ -161,6 +172,138 @@ function renderWarnings(warnings) {
   }
   box.classList.remove("hidden");
   box.innerHTML = warnings.map((w) => `<div>• ${w}</div>`).join("");
+}
+
+function getDeepSeekDemoKey() {
+  try {
+    return sessionStorage.getItem(DEEPSEEK_SESSION_KEY) || volatileDeepSeekDemoKey;
+  } catch {
+    return volatileDeepSeekDemoKey;
+  }
+}
+
+function setDeepSeekKeyStatus() {
+  if (getDeepSeekDemoKey()) {
+    deepseekKeyStatus.textContent = "DeepSeek 辅助解释已启用：key 仅保存在当前浏览器会话";
+    deepseekKeyInput.placeholder = "本次会话已保存 key；如需更换请重新粘贴";
+  } else {
+    deepseekKeyStatus.textContent = "未启用 DeepSeek 辅助解释";
+    deepseekKeyInput.placeholder = "粘贴后点保存；不会写入 GitHub";
+  }
+}
+
+function saveDeepSeekDemoKey() {
+  const key = deepseekKeyInput.value.trim();
+  if (!key) {
+    deepseekKeyStatus.textContent = "请输入 DeepSeek API key";
+    return;
+  }
+  volatileDeepSeekDemoKey = key;
+  try {
+    sessionStorage.setItem(DEEPSEEK_SESSION_KEY, key);
+  } catch {
+    // Some embedded preview browsers disable sessionStorage; keep the key in memory.
+  }
+  deepseekKeyInput.value = "";
+  setDeepSeekKeyStatus();
+}
+
+function clearDeepSeekDemoKey() {
+  volatileDeepSeekDemoKey = "";
+  try {
+    sessionStorage.removeItem(DEEPSEEK_SESSION_KEY);
+  } catch {
+    // Ignore unavailable sessionStorage.
+  }
+  deepseekKeyInput.value = "";
+  setDeepSeekKeyStatus();
+}
+
+async function addDirectDeepSeekExplanation(data, payload) {
+  const key = getDeepSeekDemoKey();
+  if (!key) return data;
+  const enhanced = {
+    ...data,
+    explanation: {
+      ...data.explanation,
+      deepseek: { enabled: true, status: "loading", text: null },
+    },
+  };
+  renderExplanation(enhanced);
+  try {
+    const response = await fetch(DEEPSEEK_API_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages: buildDeepSeekMessages(data, payload),
+        temperature: 0.2,
+        max_tokens: 900,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error?.message || `HTTP ${response.status}`);
+    }
+    const text = result.choices?.[0]?.message?.content;
+    if (!text) {
+      throw new Error("DeepSeek 返回为空");
+    }
+    enhanced.explanation.deepseek = {
+      enabled: true,
+      status: "ok",
+      text,
+      model: DEEPSEEK_MODEL,
+    };
+  } catch (err) {
+    enhanced.explanation.deepseek = {
+      enabled: true,
+      status: "api_error",
+      text: null,
+      error: `${err.message}。如果浏览器提示 Failed to fetch，通常是 DeepSeek 未开放浏览器 CORS，需要后端代理。`,
+    };
+  }
+  return enhanced;
+}
+
+function buildDeepSeekMessages(data, payload) {
+  const composition = payload.composition || {};
+  const compositionText = Object.entries(composition)
+    .filter(([, value]) => Number(value || 0) !== 0)
+    .map(([element, value]) => `${element}=${formatCompactNumber(value)}`)
+    .join(", ");
+  const predictionText = Object.values(data.predictions || {})
+    .flatMap((group) => Object.values(group || {}))
+    .map((item) => `- ${item.label}: ${formatValue(item.value, item.unit)}, 置信度 ${item.confidence}, Test R² ${item.test_r2.toFixed(2)}`)
+    .join("\n");
+  const mechanism = data.explanation?.composition_mechanism || {};
+  const notes = (mechanism.mechanism_notes || []).slice(0, 10).map((note) => `- ${note}`).join("\n");
+  return [
+    {
+      role: "system",
+      content: "你是材料学助手。基于钢材成分、工艺、模型预测和规则机理生成中文解释。不要编造数据库来源；说明模型不确定性；解释要随成分变化；输出 3-5 条要点。",
+    },
+    {
+      role: "user",
+      content: [
+        `钢种类型：${payload.material_subclass || "unknown"}`,
+        `工艺文本：${payload.process_text || "未提供"}`,
+        `成分 wt%：${compositionText || "未提供"}`,
+        `模型预测摘要：\n${predictionText || "无"}`,
+        `规则机理摘要：${mechanism.summary || "无"}`,
+        `规则机理要点：\n${notes || "无"}`,
+        "请生成面向材料研发人员的解释，突出主要元素对强度、韧性、耐蚀、热物性的影响，并提醒哪些结论依赖工艺或模型置信度。",
+      ].join("\n"),
+    },
+  ];
+}
+
+function formatCompactNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? `${parsed}` : `${value}`;
 }
 
 function staticMechanism(composition, processText) {
@@ -280,6 +423,14 @@ async function predict() {
       renderWarnings(data.warnings);
       statusBox.className = "status ok";
       statusBox.textContent = "浏览器模型已就绪：本地预测完成";
+      if (getDeepSeekDemoKey()) {
+        statusBox.textContent = "浏览器模型已就绪：正在生成 DeepSeek 解释";
+        const enhanced = await addDirectDeepSeekExplanation(data, payload);
+        renderExplanation(enhanced);
+        statusBox.textContent = enhanced.explanation.deepseek.status === "ok"
+          ? "浏览器模型 + DeepSeek 解释完成"
+          : "浏览器模型完成，DeepSeek 解释未完成";
+      }
     } catch (err) {
       renderStaticOnly(payload, `浏览器模型加载失败：${err.message}`);
       statusBox.className = "status bad";
@@ -304,7 +455,8 @@ async function predict() {
     }
     renderMetrics(document.getElementById("mechanical-results"), data.predictions.mechanical);
     renderMetrics(document.getElementById("physical-results"), data.predictions.physical);
-    renderExplanation(data);
+    const enhanced = await addDirectDeepSeekExplanation(data, payload);
+    renderExplanation(enhanced);
     renderWarnings(data.warnings);
   } catch (err) {
     renderStaticOnly(payload, `无法连接 API：${err.message}`);
@@ -320,5 +472,15 @@ presetBtn.addEventListener("click", () => {
   document.getElementById("process-text").value = "900C quench + 600C temper";
 });
 
+saveDeepseekKeyBtn.addEventListener("click", saveDeepSeekDemoKey);
+clearDeepseekKeyBtn.addEventListener("click", clearDeepSeekDemoKey);
+deepseekKeyInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    saveDeepSeekDemoKey();
+  }
+});
+
+setDeepSeekKeyStatus();
 predictBtn.addEventListener("click", predict);
 checkHealth();

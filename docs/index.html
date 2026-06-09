@@ -45,6 +45,18 @@
           <div class="actions">
             <button type="button" class="primary" id="predict-btn">开始预测</button>
           </div>
+
+          <div class="demo-key">
+            <label class="field">
+              <span>DeepSeek 演示 API Key（本次浏览器会话）</span>
+              <input type="password" id="deepseek-key" autocomplete="off" placeholder="粘贴后点保存；不会写入 GitHub" />
+            </label>
+            <div class="actions">
+              <button type="button" class="ghost" id="save-deepseek-key">保存</button>
+              <button type="button" class="ghost" id="clear-deepseek-key">清除</button>
+            </div>
+            <p class="key-status" id="deepseek-key-status">未启用 DeepSeek 辅助解释</p>
+          </div>
         </section>
 
         <section class="panel results-panel">
