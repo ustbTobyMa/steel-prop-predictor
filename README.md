@@ -1,22 +1,23 @@
-# SteelProp — GitHub Pages 静态版
+# SteelProp — GitHub Pages 浏览器预测版
 
 成分输入网页，面向 GitHub Pages 公开展示，**不含任何原始数据库 CSV**。
 
 ## 当前状态
 
 - 网站地址：https://ustbTobyMa.github.io/steel-prop-predictor/
-- 当前不依赖 Render 或其他云 API。
-- GitHub Pages 只能托管静态网页，不能运行 Flask / Python / LightGBM。
-- 无 API 时，页面提供成分输入和静态机理说明；机器学习数值预测需要本地运行或以后接入额外 API。
+- GitHub Pages 直接托管 `docs/` 静态网页。
+- 12 个 LightGBM 模型已导出为浏览器可读取的 JSON，网页会在访问者浏览器本地完成数值预测。
+- 首次预测会下载约 36 MB 模型 JSON；后续通常由浏览器缓存。
 - DeepSeek API key 必须放在后端环境变量 `DEEPSEEK_API_KEY`，不能写进 `docs/` 前端文件。
 
 ## 架构
 
 | 组件 | 用途 | 当前 GitHub Pages 是否使用 |
 |---|---|---|
-| `docs/` | 静态网页 | 使用 |
-| `api/` | Flask 预测 API | 不使用，保留给本地或未来后端 |
-| `models/` | LightGBM 模型文件 | 不由 Pages 直接运行 |
+| `docs/` | 静态网页 + 浏览器推理 JS | 使用 |
+| `docs/models/` | 导出的 LightGBM JSON 模型 | 使用 |
+| `api/` | Flask 预测 API + DeepSeek 代理 | 可选后端 |
+| `models/` | 原始 Python `.pkl` 模型 | 用于重新导出前端模型 |
 
 公开版**不会**上传或暴露：
 
@@ -31,50 +32,31 @@
 ```bash
 cd "/Users/xiaotaoma/Desktop/full thermo database/full_dataset_with_feature_doc/composition_property_thermo/steel-prop-github"
 git add .
-git commit -m "Use static GitHub Pages mode without API"
+git commit -m "Run LightGBM predictions in browser"
 git push
 ```
 
-详细说明见 [DEPLOY.md](./DEPLOY.md)。
+## 重新导出浏览器模型
 
-## 本地完整预测
-
-如果需要真正的模型数值预测，可以在本机运行 API：
+如果更新了 `models/` 里的 `.pkl`，重新生成前端模型：
 
 ```bash
-cd steel-prop-github
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-PYTHONPATH=api gunicorn api.app:app --bind 127.0.0.1:10000
+PYTHONPATH=api python3 tools/export_browser_models.py
 ```
 
-然后把 `docs/config.js` 里的 `API_BASE` 改成本地地址 `http://127.0.0.1:10000` 做本地测试。
+然后运行一致性检查：
 
-完整功能（含相近材料热力学解释）仍在上级目录的本地完整版中运行，数据库不离开本机。
+```bash
+PYTHONPATH=api python3 tests/write_browser_predictor_expected.py
+node tests/browser_predictor_check.mjs
+```
 
-## 未来后端 API
+## DeepSeek 辅助解释
 
-仓库已保留 `Dockerfile`，可以把 `api/` + `models/` 部署到能保存 Secret 的 Python 服务，例如 Hugging Face Spaces Docker、学校服务器或其他云主机。
-
-后端需要设置：
+浏览器版可以直接显示模型数值预测，但 DeepSeek 不能直接从前端调用。若要启用 DeepSeek 辅助解释，需要部署 `api/` 后端并设置：
 
 ```text
 DEEPSEEK_API_KEY=你的新 DeepSeek key
 ```
 
-如果配置了 `DEEPSEEK_API_KEY`，`/api/predict` 会返回 DeepSeek 辅助解释：
-
-```json
-{
-  "explanation": {
-    "composition_mechanism": {},
-    "deepseek": {
-      "status": "ok",
-      "text": "AI 辅助解释..."
-    }
-  }
-}
-```
-
-然后把 `docs/config.js` 里的 `API_BASE` 改成后端 HTTPS 地址，GitHub Pages 前端即可调用模型和 DeepSeek 辅助解释。
+然后把 `docs/config.js` 里的 `API_BASE` 改成后端 HTTPS 地址。

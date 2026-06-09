@@ -1,0 +1,20 @@
+{
+  "predictions": {
+    "mechanical": {
+      "target_elongation_pct": 11.946271658890076,
+      "target_hardness": 303.56608633376715,
+      "target_reduction_of_area_pct": 50.734356509021914,
+      "target_tensile_strength_mpa": 1029.4795477236546,
+      "target_yield_strength_mpa": 872.3571402508651
+    },
+    "physical": {
+      "target_bulk_modulus_gpa": 159.9978515467614,
+      "target_density_g_cm3": 7.93947151559195,
+      "target_elastic_modulus_gpa": 207.46890755724345,
+      "target_poisson_ratio": 0.29211815648802075,
+      "target_shear_modulus_gpa": 78.55741086636756,
+      "target_specific_heat_j_g_c": 0.47347887461253224,
+      "target_thermal_conductivity_w_m_k": 41.418666363557634
+    }
+  }
+}

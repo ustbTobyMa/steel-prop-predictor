@@ -1,3 +1,5 @@
+import { predictInBrowser } from "./browser-predictor.js";
+
 const API_BASE = ((window.STEEL_PROP_CONFIG && window.STEEL_PROP_CONFIG.API_BASE) || "").trim();
 
 const ELEMENTS = [
@@ -240,8 +242,8 @@ async function checkHealth() {
   const url = apiUrl("/api/health");
   if (!url) {
     statusBox.className = "status neutral";
-    statusBox.textContent = "GitHub Pages 静态版：未连接模型 API";
-    predictBtn.textContent = "生成静态说明";
+    statusBox.textContent = "浏览器模型模式：首次预测会下载约 36 MB 模型";
+    predictBtn.textContent = "开始预测";
     return;
   }
   try {
@@ -266,7 +268,26 @@ async function predict() {
   const payload = currentPayload();
   const url = apiUrl("/api/predict");
   if (!url) {
-    renderStaticOnly(payload);
+    predictBtn.disabled = true;
+    predictBtn.textContent = "加载模型…";
+    statusBox.className = "status neutral";
+    statusBox.textContent = "正在加载浏览器模型，首次可能需要几十秒";
+    try {
+      const data = await predictInBrowser(payload);
+      renderMetrics(document.getElementById("mechanical-results"), data.predictions.mechanical);
+      renderMetrics(document.getElementById("physical-results"), data.predictions.physical);
+      renderExplanation(data);
+      renderWarnings(data.warnings);
+      statusBox.className = "status ok";
+      statusBox.textContent = "浏览器模型已就绪：本地预测完成";
+    } catch (err) {
+      renderStaticOnly(payload, `浏览器模型加载失败：${err.message}`);
+      statusBox.className = "status bad";
+      statusBox.textContent = "浏览器模型加载失败";
+    } finally {
+      predictBtn.disabled = false;
+      predictBtn.textContent = "开始预测";
+    }
     return;
   }
   predictBtn.disabled = true;
@@ -290,9 +311,6 @@ async function predict() {
   } finally {
     predictBtn.disabled = false;
     predictBtn.textContent = "开始预测";
-    if (!apiUrl("/api/health")) {
-      predictBtn.textContent = "生成静态说明";
-    }
   }
 }
 
