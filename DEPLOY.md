@@ -12,14 +12,14 @@ GitHub Pages 可以托管：
 - `docs/browser-predictor.js`
 - `docs/models/*.json`
 
-当前网页会提供成分输入、力学/物理性能预测和规则机理说明。预测在访问者浏览器中运行，不需要 Flask 后端。
+当前网页会提供成分输入、力学/物理性能预测、规则机理说明和精简热力学参考。预测和最近邻热力学参考检索都在访问者浏览器中运行，不需要 Flask 后端。
 
 限制：
 
-- 首次预测需要下载约 36 MB 模型 JSON。
+- 首次预测需要下载约 46 MB 静态 JSON。
 - 手机和慢网环境会更慢。
 - DeepSeek API key 不能放在 GitHub Pages 前端文件中；如需 DeepSeek 辅助解释，必须另有后端代理。
-- Thermo-Calc 数据库对照仍只保留在本地完整版。
+- 完整 Thermo-Calc 数据库对照仍只保留在本地完整版；Pages 只包含派生的精简参考包。
 
 ## 安全边界
 
@@ -29,7 +29,7 @@ GitHub Pages 可以托管：
 - `thermo_explain.csv`、`metadata.csv`、`modeling_clean.csv`
 - 测试集逐条预测结果
 
-公开网页会包含导出的模型树结构，因此模型本身是公开的；这和把网页部署在 GitHub Pages 上是同一安全边界。
+公开网页会包含导出的模型树结构和精简热力学参考包，因此模型和精简参考摘要本身是公开的；这和把网页部署在 GitHub Pages 上是同一安全边界。
 
 ## 部署步骤
 
@@ -68,6 +68,7 @@ git push
 
 ```bash
 PYTHONPATH=api python3 tools/export_browser_models.py
+python3 tools/export_browser_thermo_reference.py
 PYTHONPATH=api python3 tests/write_browser_predictor_expected.py
 node tests/browser_predictor_check.mjs
 ```

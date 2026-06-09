@@ -33,6 +33,16 @@ const payload = {
 const expected = JSON.parse(await readFile(new URL("./browser_predictor_expected.json", import.meta.url), "utf8"));
 const actual = await predictInBrowser(payload, "./models/");
 
+assert.ok(actual.explanation.thermo_reference, "browser predictor should include a compact thermo reference");
+assert.ok(
+  actual.explanation.thermo_reference.reference_material?.material_name,
+  "thermo reference should include nearest material metadata",
+);
+assert.ok(
+  actual.explanation.thermo_reference.thermo_metrics?.some((item) => item.key === "ae1_c" && Number.isFinite(item.value)),
+  "thermo reference should include compact numeric thermodynamic metrics",
+);
+
 for (const [groupName, group] of Object.entries(expected.predictions)) {
   for (const [target, expectedValue] of Object.entries(group)) {
     const actualValue = actual.predictions[groupName][target].value;

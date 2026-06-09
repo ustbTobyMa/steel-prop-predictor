@@ -42,6 +42,7 @@ let browserModelCache = null;
 export async function predictInBrowser(payload, basePath = "./models/") {
   const assets = await loadBrowserModels(basePath);
   const row = enrichFeatures(buildFeatureRow(payload));
+  const thermoReference = findThermoReference(row, assets.thermo);
   const predictions = {};
   for (const [target, meta] of Object.entries(assets.manifest.targets)) {
     const model = assets.models[target];
@@ -61,11 +62,11 @@ export async function predictInBrowser(payload, basePath = "./models/") {
     ok: true,
     predictions: { mechanical, physical },
     explanation: {
-      composition_mechanism: explainFromRow(row),
-      thermo_reference: null,
+      composition_mechanism: explainFromRow(row, Boolean(thermoReference)),
+      thermo_reference: thermoReference,
       deepseek: { enabled: false, status: "browser_only", text: null },
     },
-    warnings: browserWarnings(payload, predictions),
+    warnings: browserWarnings(payload, predictions, thermoReference),
     public_mode: true,
     browser_mode: true,
   };
@@ -78,7 +79,8 @@ export async function loadBrowserModels(basePath = "./models/") {
   for (const [target, meta] of Object.entries(manifest.targets)) {
     models[target] = await fetchJson(`${basePath}${meta.file}`);
   }
-  browserModelCache = { manifest, models };
+  const thermo = await fetchOptionalJson(`${basePath}thermo-reference.json`);
+  browserModelCache = { manifest, models, thermo };
   return browserModelCache;
 }
 
@@ -88,6 +90,14 @@ async function fetchJson(url) {
     throw new Error(`无法加载 ${url}: HTTP ${response.status}`);
   }
   return response.json();
+}
+
+async function fetchOptionalJson(url) {
+  try {
+    return await fetchJson(url);
+  } catch {
+    return null;
+  }
 }
 
 export function buildFeatureRow(payload) {
@@ -108,6 +118,54 @@ export function buildFeatureRow(payload) {
   row.comp_total_wtpct = 100;
   row.comp_total_error_wtpct = 0;
   return row;
+}
+
+export function findThermoReference(row, bundle) {
+  if (!bundle?.entries?.length || !bundle.match_columns?.length) return null;
+  const query = bundle.match_columns.map((col) => numberOrZero(row[col]));
+  const weights = Array.isArray(bundle.weights) ? bundle.weights : query.map(() => 1);
+  let bestEntry = null;
+  let bestDistance = Infinity;
+  for (const entry of bundle.entries) {
+    const composition = entry.c || [];
+    let sum = 0;
+    for (let i = 0; i < query.length; i += 1) {
+      const refValue = numberOrZero(composition[i]);
+      const diff = (refValue - query[i]) * numberOrZero(weights[i] ?? 1);
+      sum += diff * diff;
+    }
+    const distance = Math.sqrt(sum);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestEntry = entry;
+    }
+  }
+  if (!bestEntry) return null;
+  const referenceName = bestEntry.n || bestEntry.i || "相近材料";
+  return {
+    reference_material: {
+      material_id: bestEntry.i,
+      material_name: referenceName,
+      material_subclass: bestEntry.s || "",
+      distance: bestDistance,
+    },
+    note: `以下热力学结果来自成分最接近的公开精简参考材料「${referenceName}」（Thermo-Calc 预计算摘要），供机理参考，非对新成分实时计算。`,
+    summary: bestEntry.u || "当前热力学摘要不足以形成明确机理说明。",
+    mechanism_notes: Array.isArray(bestEntry.r) ? bestEntry.r : [],
+    thermo_metrics: thermoMetrics(bundle, bestEntry.m || []),
+  };
+}
+
+function thermoMetrics(bundle, values) {
+  return (bundle.metrics || [])
+    .map((meta, index) => ({
+      key: meta.key,
+      label: meta.label,
+      unit: meta.unit || "",
+      digits: Number.isFinite(Number(meta.digits)) ? Number(meta.digits) : 2,
+      value: asNumber(values[index]),
+    }))
+    .filter((item) => Number.isFinite(item.value));
 }
 
 export function enrichFeatures(row) {
@@ -292,7 +350,7 @@ function ruleConfidence(hasProcessText, hasAction, hasTemp, hasCooling, hasSize,
   return Math.min(1, Math.max(0, score));
 }
 
-function explainFromRow(row) {
+function explainFromRow(row, hasThermoReference = false) {
   const notes = [];
   const c = asNumber(row.comp_C_wtpct);
   const cr = asNumber(row.comp_Cr_wtpct);
@@ -309,17 +367,22 @@ function explainFromRow(row) {
   if (mo >= 0.3) notes.push("Mo 提高回火稳定性并抑制某些回火脆性。");
   if (si >= 0.5) notes.push("Si 可脱氧并影响铁素体强化，过高时可能影响冲击韧性。");
   if (!String(row.process_text || "").trim()) notes.push("未提供工艺信息：当前预测更接近“代表工艺假设”下的趋势，不宜直接当作最终质保值。");
-  notes.push("浏览器版不包含 Thermo-Calc 数据库检索，因此不提供相近材料的热力学对照。");
+  if (hasThermoReference) {
+    notes.push("下方热力学参考来自相近材料的公开精简预计算包，用于解释相区和热物性趋势。");
+  } else {
+    notes.push("当前未加载热力学精简参考包，因此不显示相近材料热力学对照。");
+  }
   return {
     summary: notes.slice(0, 5).join(" ") || "成分信息不足以生成详细机理说明。",
     mechanism_notes: notes,
   };
 }
 
-function browserWarnings(payload, predictions) {
-  const warnings = ["当前为浏览器本地模型预测，模型文件会下载到访问者浏览器。"];
+function browserWarnings(payload, predictions, thermoReference) {
+  const warnings = ["当前为浏览器本地模型预测，模型和精简热力学参考包会下载到访问者浏览器。"];
   if (!payload.process_text) warnings.push("未输入热处理/工艺文本，力学性能预测不确定性较高。");
   if (Object.values(predictions).some((item) => item.confidence === "低")) warnings.push("部分物理性质模型置信度较低（尤其密度），请谨慎解读。");
+  if (thermoReference) warnings.push("热力学结果来自成分最近邻的预计算参考材料，不是对当前输入实时运行 Thermo-Calc。");
   return warnings;
 }
 

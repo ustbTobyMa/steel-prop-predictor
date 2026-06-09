@@ -122,14 +122,31 @@ function renderApiRequired(container, labels) {
 
 function renderExplanation(payload) {
   const compBox = document.getElementById("composition-explain");
+  const thermoBox = document.getElementById("thermo-explain");
   const aiBox = document.getElementById("ai-explain");
   const comp = payload.explanation?.composition_mechanism;
+  const thermo = payload.explanation?.thermo_reference;
   const ai = payload.explanation?.deepseek;
   compBox.classList.remove("placeholder");
   compBox.innerHTML = `
     <p>${comp?.summary || "暂无说明"}</p>
     ${comp?.mechanism_notes?.length ? `<ul>${comp.mechanism_notes.map((n) => `<li>${n}</li>`).join("")}</ul>` : ""}
   `;
+  if (thermo) {
+    const ref = thermo.reference_material || {};
+    thermoBox.classList.remove("hidden");
+    thermoBox.innerHTML = `
+      <strong>热力学参考（相近材料）</strong>
+      <p>${escapeHtml(thermo.note || "")}</p>
+      <p>参考材料：${escapeHtml(ref.material_name || ref.material_id || "—")}（${escapeHtml(ref.material_subclass || "未知子类")}）</p>
+      ${renderThermoMetrics(thermo.thermo_metrics)}
+      <p>${escapeHtml(thermo.summary || "")}</p>
+      ${thermo.mechanism_notes?.length ? `<ul>${thermo.mechanism_notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>` : ""}
+    `;
+  } else {
+    thermoBox.classList.add("hidden");
+    thermoBox.innerHTML = "";
+  }
   if (ai?.status === "ok" && ai.text) {
     aiBox.classList.remove("hidden");
     aiBox.innerHTML = `<strong>AI 辅助解释</strong>${paragraphs(ai.text)}`;
@@ -143,6 +160,28 @@ function renderExplanation(payload) {
     aiBox.classList.add("hidden");
     aiBox.innerHTML = "";
   }
+}
+
+function renderThermoMetrics(metrics) {
+  const entries = (metrics || []).filter((item) => Number.isFinite(Number(item.value)));
+  if (!entries.length) return "";
+  return `
+    <div class="thermo-metrics">
+      ${entries.map((item) => `
+        <span class="thermo-chip">
+          <strong>${escapeHtml(item.label)}</strong>
+          ${escapeHtml(formatThermoValue(item.value, item.unit, item.digits))}
+        </span>
+      `).join("")}
+    </div>
+  `;
+}
+
+function formatThermoValue(value, unit, digits = 2) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return "—";
+  const fixed = parsed.toFixed(Math.max(0, Number(digits) || 0));
+  return unit ? `${fixed} ${unit}` : fixed;
 }
 
 function paragraphs(text) {
@@ -280,7 +319,13 @@ function buildDeepSeekMessages(data, payload) {
     .map((item) => `- ${item.label}: ${formatValue(item.value, item.unit)}, 置信度 ${item.confidence}, Test R² ${item.test_r2.toFixed(2)}`)
     .join("\n");
   const mechanism = data.explanation?.composition_mechanism || {};
+  const thermo = data.explanation?.thermo_reference;
   const notes = (mechanism.mechanism_notes || []).slice(0, 10).map((note) => `- ${note}`).join("\n");
+  const thermoNotes = (thermo?.mechanism_notes || []).slice(0, 8).map((note) => `- ${note}`).join("\n");
+  const thermoMetrics = (thermo?.thermo_metrics || [])
+    .slice(0, 12)
+    .map((item) => `- ${item.label}: ${formatThermoValue(item.value, item.unit, item.digits)}`)
+    .join("\n");
   return [
     {
       role: "system",
@@ -295,6 +340,10 @@ function buildDeepSeekMessages(data, payload) {
         `模型预测摘要：\n${predictionText || "无"}`,
         `规则机理摘要：${mechanism.summary || "无"}`,
         `规则机理要点：\n${notes || "无"}`,
+        `热力学参考材料：${thermo?.reference_material?.material_name || "无"}`,
+        `热力学指标：\n${thermoMetrics || "无"}`,
+        `热力学摘要：${thermo?.summary || "无"}`,
+        `热力学要点：\n${thermoNotes || "无"}`,
         "请生成面向材料研发人员的解释，突出主要元素对强度、韧性、耐蚀、热物性的影响，并提醒哪些结论依赖工艺或模型置信度。",
       ].join("\n"),
     },
@@ -385,7 +434,7 @@ async function checkHealth() {
   const url = apiUrl("/api/health");
   if (!url) {
     statusBox.className = "status neutral";
-    statusBox.textContent = "浏览器模型模式：首次预测会下载约 36 MB 模型";
+    statusBox.textContent = "浏览器模型模式：首次预测会下载约 46 MB 静态包";
     predictBtn.textContent = "开始预测";
     return;
   }
