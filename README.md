@@ -8,6 +8,7 @@
 - 当前不依赖 Render 或其他云 API。
 - GitHub Pages 只能托管静态网页，不能运行 Flask / Python / LightGBM。
 - 无 API 时，页面提供成分输入和静态机理说明；机器学习数值预测需要本地运行或以后接入额外 API。
+- DeepSeek API key 必须放在后端环境变量 `DEEPSEEK_API_KEY`，不能写进 `docs/` 前端文件。
 
 ## 架构
 
@@ -51,3 +52,29 @@ PYTHONPATH=api gunicorn api.app:app --bind 127.0.0.1:10000
 然后把 `docs/config.js` 里的 `API_BASE` 改成本地地址 `http://127.0.0.1:10000` 做本地测试。
 
 完整功能（含相近材料热力学解释）仍在上级目录的本地完整版中运行，数据库不离开本机。
+
+## 未来后端 API
+
+仓库已保留 `Dockerfile`，可以把 `api/` + `models/` 部署到能保存 Secret 的 Python 服务，例如 Hugging Face Spaces Docker、学校服务器或其他云主机。
+
+后端需要设置：
+
+```text
+DEEPSEEK_API_KEY=你的新 DeepSeek key
+```
+
+如果配置了 `DEEPSEEK_API_KEY`，`/api/predict` 会返回 DeepSeek 辅助解释：
+
+```json
+{
+  "explanation": {
+    "composition_mechanism": {},
+    "deepseek": {
+      "status": "ok",
+      "text": "AI 辅助解释..."
+    }
+  }
+}
+```
+
+然后把 `docs/config.js` 里的 `API_BASE` 改成后端 HTTPS 地址，GitHub Pages 前端即可调用模型和 DeepSeek 辅助解释。

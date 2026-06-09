@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import os
 import pickle
 import sys
+import urllib.error
+import urllib.request
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -15,6 +19,8 @@ from column_specs import ACTIVE_COMPOSITION_COLUMNS
 
 ROOT = Path(__file__).resolve().parent
 MODEL_ROOT = ROOT.parent / "models"
+DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
 
 BUNDLE_TARGETS = {
     "mechanical_lgbm": [
@@ -171,6 +177,87 @@ def explain_from_phys(frame: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def build_deepseek_messages(result: dict[str, Any]) -> list[dict[str, str]]:
+    input_data = result.get("input") or {}
+    composition = input_data.get("composition") or {}
+    composition_text = ", ".join(
+        f"{col.removeprefix('comp_').removesuffix('_wtpct')}={_format_number(value)}"
+        for col, value in sorted(composition.items())
+        if _as_float(value) not in (None, 0.0)
+    )
+    prediction_text = _prediction_summary(result.get("predictions") or {})
+    mechanism = (result.get("explanation") or {}).get("composition_mechanism") or {}
+    notes = mechanism.get("mechanism_notes") or []
+    note_text = "\n".join(f"- {note}" for note in notes[:10])
+
+    return [
+        {
+            "role": "system",
+            "content": (
+                "你是材料学助手。请基于给定钢材成分、工艺文本、模型预测和规则机理，"
+                "生成中文解释。要求：不要编造数据库来源；明确指出模型不确定性；"
+                "解释要随成分变化，避免通用模板；输出 3-5 条要点。"
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"钢种类型：{input_data.get('material_subclass') or 'unknown'}\n"
+                f"工艺文本：{input_data.get('process_text') or '未提供'}\n"
+                f"成分 wt%：{composition_text or '未提供'}\n"
+                f"模型预测摘要：\n{prediction_text or '无'}\n"
+                f"规则机理摘要：{mechanism.get('summary') or '无'}\n"
+                f"规则机理要点：\n{note_text or '无'}\n\n"
+                "请生成面向材料研发人员的解释，突出主要元素对强度、韧性、耐蚀、热物性的影响，"
+                "并提醒哪些结论依赖工艺或模型置信度。"
+            ),
+        },
+    ]
+
+
+def enhance_explanation_with_deepseek(
+    result: dict[str, Any],
+    api_key: str | None = None,
+    timeout: float = 20.0,
+) -> dict[str, Any]:
+    key = (api_key if api_key is not None else os.getenv("DEEPSEEK_API_KEY", "")).strip()
+    if not key:
+        return {"enabled": False, "status": "missing_api_key", "text": None}
+
+    request_payload = {
+        "model": DEEPSEEK_MODEL,
+        "messages": build_deepseek_messages(result),
+        "temperature": 0.2,
+        "max_tokens": 900,
+    }
+    request = urllib.request.Request(
+        DEEPSEEK_API_URL,
+        data=json.dumps(request_payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            response_data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:500]
+        return {"enabled": True, "status": "api_error", "text": None, "error": f"HTTP {exc.code}: {detail}"}
+    except Exception as exc:
+        return {"enabled": True, "status": "api_error", "text": None, "error": f"{type(exc).__name__}: {exc}"}
+
+    text = (
+        response_data.get("choices", [{}])[0]
+        .get("message", {})
+        .get("content")
+    )
+    if not text:
+        return {"enabled": True, "status": "empty_response", "text": None}
+    return {"enabled": True, "status": "ok", "text": text.strip(), "model": DEEPSEEK_MODEL}
+
+
 def predict_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if not MODEL_ROOT.exists():
         raise FileNotFoundError(f"Models not found at {MODEL_ROOT}")
@@ -187,7 +274,7 @@ def predict_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
     mechanical = {k: v for k, v in predictions.items() if v["group"] == "mechanical"}
     physical = {k: v for k, v in predictions.items() if v["group"] == "physical"}
-    return {
+    result = {
         "ok": True,
         "input": {
             "material_subclass": row["material_subclass"],
@@ -202,6 +289,8 @@ def predict_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "warnings": warnings,
         "public_mode": True,
     }
+    result["explanation"]["deepseek"] = enhance_explanation_with_deepseek(result)
+    return result
 
 
 def health_payload() -> dict[str, Any]:
@@ -217,6 +306,7 @@ def health_payload() -> dict[str, Any]:
         "ok": mechanical_ready and physical_ready,
         "mechanical_models": mechanical_ready,
         "physical_models": physical_ready,
+        "deepseek_configured": bool(os.getenv("DEEPSEEK_API_KEY", "").strip()),
         "public_mode": True,
         "database_attached": False,
     }
@@ -238,3 +328,35 @@ def _safe(row: pd.Series, key: str) -> float | None:
     if not np.isfinite(value):
         return None
     return value
+
+
+def _as_float(value: Any) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(parsed):
+        return None
+    return parsed
+
+
+def _format_number(value: Any) -> str:
+    parsed = _as_float(value)
+    if parsed is None:
+        return str(value)
+    return f"{parsed:g}"
+
+
+def _prediction_summary(predictions: dict[str, Any]) -> str:
+    lines: list[str] = []
+    for group_name in ("mechanical", "physical"):
+        group = predictions.get(group_name) or {}
+        for item in group.values():
+            value = item.get("value")
+            label = item.get("label")
+            unit = item.get("unit") or ""
+            confidence = item.get("confidence")
+            if label is None or value is None:
+                continue
+            lines.append(f"- {label}: {_format_number(value)} {unit}, 置信度 {confidence}")
+    return "\n".join(lines[:12])

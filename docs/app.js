@@ -112,12 +112,42 @@ function renderApiRequired(container, labels) {
 
 function renderExplanation(payload) {
   const compBox = document.getElementById("composition-explain");
+  const aiBox = document.getElementById("ai-explain");
   const comp = payload.explanation?.composition_mechanism;
+  const ai = payload.explanation?.deepseek;
   compBox.classList.remove("placeholder");
   compBox.innerHTML = `
     <p>${comp?.summary || "暂无说明"}</p>
     ${comp?.mechanism_notes?.length ? `<ul>${comp.mechanism_notes.map((n) => `<li>${n}</li>`).join("")}</ul>` : ""}
   `;
+  if (ai?.status === "ok" && ai.text) {
+    aiBox.classList.remove("hidden");
+    aiBox.innerHTML = `<strong>AI 辅助解释</strong>${paragraphs(ai.text)}`;
+  } else if (ai?.enabled && ai.status !== "ok") {
+    aiBox.classList.remove("hidden");
+    aiBox.innerHTML = `<strong>AI 辅助解释暂不可用</strong><p>${escapeHtml(ai.error || ai.status)}</p>`;
+  } else {
+    aiBox.classList.add("hidden");
+    aiBox.innerHTML = "";
+  }
+}
+
+function paragraphs(text) {
+  return String(text)
+    .split(/\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => `<p>${escapeHtml(part)}</p>`)
+    .join("");
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function renderWarnings(warnings) {
@@ -219,7 +249,9 @@ async function checkHealth() {
     const data = await res.json();
     if (data.ok) {
       statusBox.className = "status ok";
-      statusBox.textContent = "API 已连接：公开模式（不含数据库）";
+      statusBox.textContent = data.deepseek_configured
+        ? "API 已连接：模型 + DeepSeek 辅助解释"
+        : "API 已连接：模型预测（未配置 DeepSeek）";
     } else {
       statusBox.className = "status bad";
       statusBox.textContent = "API 未就绪，请检查 Render 部署";

@@ -13,6 +13,8 @@ GitHub Pages 可以托管：
 
 当前网页会提供成分输入和静态机理说明。由于 GitHub Pages 不能运行后端程序，它不能直接执行 `api/` 里的 Flask 服务，也不能直接加载 `.pkl` 模型做机器学习数值预测。
 
+DeepSeek API key 也不能放在 GitHub Pages 前端文件中；前端源码会公开给所有访问者。DeepSeek 只能由后端读取环境变量后代为调用。
+
 ## 安全边界
 
 以下内容不会进入公开网页：
@@ -56,7 +58,13 @@ git push
 
 ## 如果以后有 API
 
-以后如果有不需要信用卡或学校服务器上的 Python API，只需要改 `docs/config.js`：
+以后如果有不需要信用卡或学校服务器上的 Python API，先在后端设置：
+
+```text
+DEEPSEEK_API_KEY=你的新 DeepSeek key
+```
+
+然后改 `docs/config.js`：
 
 ```javascript
 window.STEEL_PROP_CONFIG = {
@@ -68,6 +76,8 @@ window.STEEL_PROP_CONFIG = {
 
 - `GET /api/health`
 - `POST /api/predict`
+
+仓库已经包含 `Dockerfile`，可用于 Hugging Face Spaces Docker、学校服务器或其他能保存 Secret 的服务。部署后端时不要把 key 写入代码或提交到 GitHub。
 
 ## 本地测试 API
 

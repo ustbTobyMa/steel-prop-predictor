@@ -229,6 +229,12 @@ button.ghost {
   border-color: #99f6e4;
 }
 
+.explain-box.ai {
+  margin-top: 12px;
+  background: #f8fafc;
+  border-color: #bfdbfe;
+}
+
 .explain-box ul {
   margin: 10px 0 0;
   padding-left: 18px;
