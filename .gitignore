@@ -1,0 +1,24 @@
+# Never commit raw datasets or derived tables with sample records
+*.csv
+*.jsonl
+*.parquet
+output/
+data/
+**/test_predictions.csv
+
+# Training artifacts with row-level details
+**/all_results.json
+**/shap_summary.json
+
+# Secrets and local overrides
+.env
+.env.*
+docs/config.local.js
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+
+# Large local rebuild artifacts (models are committed intentionally)
+# Uncomment if you prefer Git LFS for models instead:
+# models/

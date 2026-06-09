@@ -1,0 +1,252 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f1ea;
+  --panel: #fffdf8;
+  --ink: #1f2933;
+  --muted: #5f6b76;
+  --line: #ddd4c4;
+  --accent: #0f766e;
+  --accent-soft: #d1fae5;
+  --warn: #92400e;
+  --warn-bg: #fef3c7;
+  --shadow: 0 18px 40px rgba(31, 41, 51, 0.08);
+  font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 30%),
+    linear-gradient(180deg, #efe8db, var(--bg));
+  color: var(--ink);
+}
+
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 20px 48px;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 34px;
+  line-height: 1.1;
+}
+
+.subtitle {
+  margin: 0;
+  max-width: 640px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.status {
+  min-width: 220px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+}
+
+.status.ok { border-color: #6ee7b7; background: #ecfdf5; }
+.status.bad { border-color: #fca5a5; background: #fef2f2; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 20px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.field span { color: var(--muted); }
+
+input, select, textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  background: #fff;
+}
+
+textarea { resize: vertical; min-height: 84px; }
+
+.grid-elements {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.element-field label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.element-field input {
+  padding: 8px 10px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+button {
+  border: none;
+  border-radius: 999px;
+  padding: 11px 18px;
+  font: inherit;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  color: white;
+}
+
+button.ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.result-block + .result-block {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.result-block h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.metric-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  background: #fff;
+}
+
+.metric-card .label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.metric-card .value {
+  margin-top: 6px;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.metric-card .meta {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.conf-high { color: #047857; }
+.conf-mid { color: #b45309; }
+.conf-low { color: #b91c1c; }
+
+.explain-box {
+  border-radius: 16px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+  line-height: 1.7;
+  font-size: 14px;
+}
+
+.explain-box.thermo {
+  margin-top: 12px;
+  background: var(--accent-soft);
+  border-color: #99f6e4;
+}
+
+.explain-box ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.warnings {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 14px;
+}
+
+.hidden { display: none; }
+.placeholder { color: var(--muted); }
+
+.footnote {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media (max-width: 920px) {
+  .layout { grid-template-columns: 1fr; }
+  .hero { flex-direction: column; }
+}
